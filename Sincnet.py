@@ -21,7 +21,7 @@ wshift = int(fs * cw_shift / 1000)
 lr =  0.001
 alpha = 0.95
 eps = 1e-7
-epochs = 100
+epochs = 20
 batch_size = 128
 batches = 800
 eval_epoch = 10
@@ -30,9 +30,8 @@ eval_epoch = 10
 class Sinc_Conv(nn.Module):
   '''
   Sinc-сверткa (without bias)
-
   sr - частота дискретизации (по умолчанию 16000)
-  out_channels - количество  sinc-фильтров
+  out_channels - количество  sinc-фильтров
   kernel_size - длина sinc-фильтра
   in_channels - количество входных каналов (должен быть 1)
   '''
@@ -140,17 +139,17 @@ class ArseNet(nn.Module):
     # convolution
     self.ln0 = LayerNorm(current_dim)
     self.sinc1 = Sinc_Conv(80, 251)
-    current_dim = int((current_dim - 250) / 3) * 80
+    current_dim = int((current_dim - 250) / 3)
     self.ln1 = LayerNorm([80, current_dim])
     self.conv2 = nn.Conv1d(80, 60, 5)
-    current_dim = int((current_dim - 4) / 3) * 60
+    current_dim = int((current_dim - 4) / 3)
     self.ln2 = LayerNorm([60, current_dim])
     self.conv3 = nn.Conv1d(60, 60, 5)
-    current_dim = int((current_dim - 4) / 3) * 60
+    current_dim = int((current_dim - 4) / 3)
     self.ln3 = LayerNorm([60, current_dim])
 
     # fully connected part
-    self.fc1 = nn.Linear(current_dim, 2048)
+    self.fc1 = nn.Linear(current_dim * 60, 2048)
     self.bn1 = nn.BatchNorm1d(2048, momentum=0.5)
     self.fc2 = nn.Linear(2048, 2048)
     self.bn2 = nn.BatchNorm1d(2048, momentum=0.5)
@@ -276,7 +275,7 @@ for epoch in range(epochs):
     inp, label = create_batches(batch_size, folder, wave_list_train, snt_train,
                                 wlen, labels, 0.2)
     out = model(inp)
-    loss = cost(pred, label.long())
+    loss = cost(out.float(), label.long())
 
     pred = torch.max(out, dim=1)[1]
     err = torch.mean((pred != label.long()).float())
@@ -302,13 +301,13 @@ for epoch in range(epochs):
         signal, fs = sf.read(folder + wave_list_test[k])
 
         signal = torch.from_numpy(signal).float().cuda().contiguous()
-        lab_batch = labels[wave_list_test[k]]
+        lab_batch = labels[wave_list_test[k].lower()]
         
         start, stop = 0, wlen
         frames = int((signal.shape[0] - wlen) / wshift)
 
         arr = torch.zeros([batch_size, wlen]).float().cuda().contiguous()
-        lab = Variable((torch.zeros(frames + 1)+ lab_batch).cuda().contiguous().long())
+        lab = Variable((torch.zeros(frames + 1) + lab_batch).cuda().contiguous().long())
         out = Variable(torch.zeros(frames + 1, 462).float().cuda().contiguous())
 
         count_fr, total_count_fr = 0, 0
@@ -320,7 +319,7 @@ for epoch in range(epochs):
           total_count_fr += 1
           if count_fr == batch_size:
             inp = Variable(arr)
-            out[tota_count_fr - batch_size: total_count_fr, :] = model(inp)
+            out[total_count_fr - batch_size: total_count_fr, :] = model(inp)
             count_fr = 0
             arr = torch.zeros([batch_size, wlen]).float().cuda().contiguous()
         
@@ -329,7 +328,7 @@ for epoch in range(epochs):
           out[total_count_fr - count_fr:total_count_fr, :] = model(inp)
         
         pred = torch.max(out, dim=1)[1]
-        loss = cost(out, label.long())
+        loss = cost(out, lab.long())
         err = torch.mean((pred != lab.long()).float())
 
         val, best_class = torch.max(torch.sum(out, dim=0), 0)
