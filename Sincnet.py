@@ -1,26 +1,30 @@
 '''
 Implementation of SincNet via arxiv.org/pdf/1808.00158
 '''
-
-%matplotlib inline
-import matplotlib.pyplot as plt
-from tqdm import tqdm_notebook
-from tqdm import tqdm
 import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import librosa
-import IPython
 import os
 import soundfile as sf
 import shutil
 
 pi = 3.141592653589793
 e = 2.718281828459045
-
 _TIMIT_PATH = 'data/lisa/data/timit/raw/TIMIT'
+cw_len = 200
+cw_shift = 10
+fs = 16000
+wlen = int(fs * cw_len / 1000)
+wshift = int(fs * cw_shift / 1000)
+lr =  0.001
+alpha = 0.95
+eps = 1e-7
+epochs = 100
+batch_size = 128
+batches = 800
+eval_epoch = 10
 
 
 class Sinc_Conv(nn.Module):
@@ -91,7 +95,7 @@ class Sinc_Conv(nn.Module):
     band = band[:, 0]
     center = 2 * band.view(-1, 1)
 
-    f1_low = torch.matmul(low.double(), self.n.double()).float()
+    f1_low = torch.matmul(low, self.n)
     f2_high = torch.matmul(high, self.n)
 
     left = self.window * 2 * (torch.sin(f2_high) - torch.sin(f1_low)) / self.n
@@ -135,13 +139,13 @@ class ArseNet(nn.Module):
     # convolution
     self.ln0 = LayerNorm(current_dim)
     self.sinc1 = Sinc_Conv(80, 251)
-    current_dim = int((current_dim - 250) / 3)
+    current_dim = int((current_dim - 250) / 3) * 80
     self.ln1 = LayerNorm([80, current_dim])
     self.conv2 = nn.Conv1d(80, 60, 5)
-    current_dim = int((current_dim - 4) / 3)
+    current_dim = int((current_dim - 4) / 3) * 60
     self.ln2 = LayerNorm([60, current_dim])
     self.conv3 = nn.Conv1d(60, 60, 5)
-    current_dim = int((current_dim - 4) / 3)
+    current_dim = int((current_dim - 4) / 3) * 60
     self.ln3 = LayerNorm([60, current_dim])
 
     # fully connected part
@@ -218,18 +222,6 @@ for i in range(len(list_of_signals)):
   file_out = out_folder + '/' + list_of_signals[i]
   sf.write(file_out, signal, fs)
 
-cw_len = 200
-cw_shift = 10
-fs = 16000
-wlen = int(fs * cw_len / 1000)
-wshift = int(fs * cw_shift / 1000)
-lr =  0.001
-alpha = 0.95
-eps = 1e-7
-epochs = 100
-batch_size = 128
-batches = 800
-eval_epoch = 10
 
 def create_batches(bs, folder, wave_list, snt_train, wlen, labels, factor):
   signal_batch = np.zeros([bs, wlen])
