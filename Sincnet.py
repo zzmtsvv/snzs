@@ -58,6 +58,7 @@ class Sinc_Conv(nn.Module):
     self.padding = padding
     self.out_channels = out_channels
     self.dilation = dilation
+    self.groups = groups
     self.sample_rate = sr
     self.min_low_hz = min_low_hz
     self.min_band_hz = min_band_hz
