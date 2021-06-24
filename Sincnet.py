@@ -173,7 +173,7 @@ class ArseNet(nn.Module):
     x = self.bn1(x)
     x = F.leaky_relu(x)
     x = self.fc2(x)
-    x = x.bn2(x)
+    x = self.bn2(x)
     x = F.leaky_relu(x)
     x = self.fc3(x)
     x = F.softmax(x, dim=1)
